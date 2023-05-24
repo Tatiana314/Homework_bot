@@ -1,16 +1,24 @@
-import os
+"""Telegram-бот.
+Бот-ассистент обращаеся к сервису API Практикум.Домашка
+и узнает статус домашней работы."""
+
+
 import sys
-import logging
-import requests
 import time
-import exception as exc
+import logging
 
+import requests
 
-from dotenv import load_dotenv
 from telegram import Bot, TelegramError
 from configs.logs import log_configured
-from exception.errors import (
-    NotHomeWorkError,
+from configs.base import (
+    PRACTICUM_TOKEN,
+    TELEGRAM_TOKEN,
+    TELEGRAM_CHAT_ID,
+    RETRY_PERIOD,
+    ENDPOINT,
+    HEADERS,
+    HOMEWORK_VERDICTS,
 )
 
 
@@ -20,24 +28,7 @@ handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
 
 
-load_dotenv()
-
-
-PRACTICUM_TOKEN: str = os.getenv('PRACTICUM_TOKEN')
-TELEGRAM_TOKEN: str = os.getenv('TELEGRAM_TOKEN')
-TELEGRAM_CHAT_ID: int = os.getenv('TELEGRAM_CHAT_ID')
-
-RETRY_PERIOD: int = 600
-ENDPOINT: str = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
-HEADERS: dict = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 MESSAGE = 'Отсутствует обязательная переменная окружения: {}'
-
-
-HOMEWORK_VERDICTS: dict[str: str] = {
-    'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
-    'reviewing': 'Работа взята на проверку ревьюером.',
-    'rejected': 'Работа проверена: у ревьюера есть замечания.'
-}
 
 
 def check_tokens():
@@ -52,13 +43,11 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправляем сообщение в Telegram чат"""
+    """Отправляем сообщение в Telegram-чат"""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except TelegramError as error:
         logger.error(f'Бот не смог отправить сообщение {error}')
-    except exc.SendMessageError as error:
-        logger.error(f'Сбой при отправке сообщения в чат telegram: {error}')
     else:
         logger.debug(f'Бот отправил сообщение: {message}')
 
@@ -115,17 +104,16 @@ def check_response(response):
 def parse_status(homework):
     """Определяем статус домашней работы."""
     homework_name = homework.get('homework_name')
-    print(f'Почему нет значения? {homework_name}')
     if homework_name is None:
-        raise KeyError('В словаре нет ключа "homework_name"')
+        raise KeyError('В словаре нет ключа homework_name')
     homework_status = homework.get('status')
     logger.debug(f'Текущий статус работы {homework_status}')
     if homework_status is None:
-        raise KeyError('В словаре нет ключа "homework_status"')
+        raise KeyError('В словаре нет ключа homework_status')
     verdict = HOMEWORK_VERDICTS.get(homework_status)
     logger.debug(f'Оценка работы {verdict}')
     if verdict is None:
-        raise ValueError(f'Неизвестный статус "{homework_status}"')
+        raise ValueError(f'Неизвестный статус {homework_status}')
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
@@ -140,9 +128,9 @@ def main():
     while True:
         try:
             message = 'Статус работ не изменился'
-            response = get_api_answer(timestamp) # запрос к серверу
-            if response:# Если ответ от сервера получен
-                homeworks, timestamp = check_response(response)# проверка данных с сервера передача списка и времени
+            response = get_api_answer(timestamp)
+            if response:
+                homeworks, timestamp = check_response(response)
                 if homeworks:
                     for homework in homeworks:
                         message = parse_status(homework)
