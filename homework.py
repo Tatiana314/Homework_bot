@@ -1,6 +1,8 @@
-"""Telegram-бот.
+"""
+Telegram-бот.
 Бот-ассистент обращаеся к сервису API Практикум.Домашка
-и узнает статус домашней работы."""
+и узнает статус домашней работы.
+"""
 
 
 import sys
@@ -43,7 +45,7 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправляем сообщение в Telegram-чат"""
+    """Отправляем сообщение в Telegram-чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except TelegramError as error:
@@ -60,7 +62,7 @@ MESSAGE_ERROR = (
 
 
 def get_api_answer(timestamp):
-    """Запрос к сервису Яндекс-практикум"""
+    """Запрос к сервису Яндекс-практикум."""
     payload = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=payload)
@@ -80,7 +82,7 @@ def get_api_answer(timestamp):
 
 
 def check_response(response):
-    """Проверяем ответ API"""
+    """Проверяем ответ API."""
     if type(response) != dict:
         logger.error('Тип данных, полученных от сервера, не является словарем')
         raise TypeError('Ожидается словарь')
@@ -118,7 +120,7 @@ def parse_status(homework):
 
 
 def main():
-    """Основная логика работы бота."""
+    """Основная функция для запуска Бот-ассистента."""
     if not check_tokens():
         sys.exit()
     bot = Bot(token=TELEGRAM_TOKEN)
