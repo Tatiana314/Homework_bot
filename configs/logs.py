@@ -7,5 +7,6 @@ log_configured.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         log_configured.FileHandler('bot.log'),
+        log_configured.StreamHandler()
     ],
 )
