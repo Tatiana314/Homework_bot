@@ -25,11 +25,10 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 ANS_KEY_ERROR = 'Ответ API не содержит ключа "{key}"'
 BOT_ADVANCE = 'Бот отправил сообщение: {message}'
-CASES_REFUSAL = ('error', 'code')
 CASES_TOKENS = ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID')
 BOT_ERROR = 'Бот не смог отправить сообщение {error}'
 DATA_ERROR = 'Ожидается словарь, получен {type_data}'
-DECODE_ERROR = (
+DENIAL_OF_SERVICE = (
     'Получен ответ от сервиса {url}.'
     'HEADERS: {headers}.'
     'params: {params}.'
@@ -41,20 +40,20 @@ HOMEWORK_VERDICTS: dict[str: str] = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
-HTTP_ERROR = (
+JOB_KEY_ERROR = 'Словарь "homeworks" не содержит ключа "{key}"'
+MESSAGE_ERROR = 'Сбой в работе программы: {error}'
+RESPONSE_ERROR = (
     'Неожиданный ответ сервера {url}. '
     'Статус ответа: {code}. '
     'HEADERS: {headers}.'
     'params: {params}.'
     'timeout: {timeout}'
 )
-JOB_KEY_ERROR = 'Словарь "homeworks" не содержит ключа "{key}"'
-MESSAGE_ERROR = 'Сбой в работе программы: {error}'
 RATING_JOB = 'Оценка работы {verdict}'
 RETRY_PERIOD = 600
 SERVER_ADVANCE = 'Получен ответ от сервиса Яндекс-практикум'
 SERVER_ERROR = (
-    'Ошибка при запросе к сервису {url}. '
+    'Ошибка при запросе к сервису: url {url}. '
     'HEADERS: {headers}.'
     'params: {params}.'
     'timeout: {timeout}.\n'
@@ -67,12 +66,6 @@ STATUS_HOMEWORK = 'Изменился статус проверки работы
 TIMEOUT = 30
 TOKENS_ERROR = 'Отсутствует обязательная переменная окружения: {}'
 TYPE_KEY_ERROR = 'Тип данных homeworks не является списком, получен {type_key}'
-
-
-class ServiceException(Exception):
-    """Ошибки в работе сервиса."""
-
-    pass
 
 
 def check_tokens():
@@ -108,20 +101,20 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(**request_params)
     except requests.exceptions.RequestException as error:
-        raise ServiceException(
+        raise OSError(
             SERVER_ERROR.format(error=error, **request_params)
         )
     else:
         logging.debug(SERVER_ADVANCE)
     if response.status_code != 200:
         raise ValueError(
-            HTTP_ERROR.format(code=response.status_code, **request_params)
+            RESPONSE_ERROR.format(code=response.status_code, **request_params)
         )
     response_json = response.json()
-    for key_refusal in CASES_REFUSAL:
+    for key_refusal in ('error', 'code'):
         if key_refusal in response_json:
             raise ValueError(
-                DECODE_ERROR.format(
+                DENIAL_OF_SERVICE.format(
                     key_refusal=key_refusal,
                     error=response_json.get(key_refusal),
                     **request_params
@@ -171,8 +164,7 @@ def main():
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
             if homeworks:
-                message = parse_status(homeworks[0])
-                if send_message(bot, message):
+                if send_message(bot, parse_status(homeworks[0])):
                     timestamp = response.get('current_date', timestamp)
         except Exception as error:
             message = MESSAGE_ERROR.format(error=error)
