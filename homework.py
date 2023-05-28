@@ -5,10 +5,9 @@ Telegram-бот.
 """
 
 
+import logging
 import sys
 import time
-import json
-import logging
 
 
 import requests
@@ -24,73 +23,69 @@ from configs.base import (
     TELEGRAM_TOKEN,
     TIMEOUT
 )
-from configs.logs import log_configured
 
-
-logger = log_configured.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler_stream = logging.StreamHandler(sys.stdout)
-handler_file = logging.FileHandler('bot.log')
-formatter = logging.Formatter(
-    '%(asctime)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s'
+ANS_KEY_ERROR = 'Ответ API не содержит ключа "{key}"'
+BOT_ADVANCE = 'Бот отправил сообщение: {message}'
+BOT_ERROR = 'Бот не смог отправить сообщение {error}'
+DATA_ERROR = 'Ожидается словарь, получен {type_data}'
+DECODE_ERROR = (
+    'Получен ответ от сервиса {endpoint}.'
+    'HEADERS: {headers}.'
+    'params: {params}.'
+    'timeout: {timeout}.\n'
+    'Ошибка: {error} {code}.'
 )
-handler_stream.setFormatter(formatter)
-handler_file.setFormatter(formatter)
-
-
-MESSAGE_BOT = 'Бот отправил сообщение: {message}'
-MESSAGE_BOT_ERROR = 'Бот не смог отправить сообщение {error}'
-MESSAGE_DATA_ERROR = 'Ожидается словарь, получен {type_data}'
-MESSAGE_DECODE_ERROR = (
-    'Ошибка декодирования полученного ответа от сервиса {endpoint}'
-)
-MESSAGE_SERVER_ERROR = (
+SERVER_ERROR = (
     'Ошибка при запросе к сервису {endpoint}. '
-    '{headers}.'
-    '{params}.'
-    '{timeout}.'
+    'HEADERS: {headers}.'
+    'params: {params}.'
+    'timeout: {timeout}.\n'
+    'Ошибка: {error}'
 )
-MESSAGE_HTTP_ERROR = (
+HTTP_ERROR = (
     'Неожиданный ответ сервера {endpoint}. '
     'Статус ответа: {code}. '
-    '{headers}.'
-    '{params}'
+    'HEADERS: {headers}.'
+    'params: {params}.'
+    'timeout: {timeout}'
 )
+JOB_KEY_ERROR = 'Словарь "homeworks" не содержит ключа "{key}"'
 MESSAGE_ERROR = 'Сбой в работе программы: {error}'
-MESSAGE_SERVER = 'Получен ответ от сервиса Яндекс-практикум'
-MESSAGE_STATUS_JOB = 'Статус работы {status}'
-MESSAGE_STATUS_JOB_ERROR = 'Неизвестный статус работы {status}'
-MESSAGE_TOKENS = 'Отсутствует обязательная переменная окружения: {}'
-KEY_ERROR = 'В словаре нет ключа "{key}"'
+SERVER_ADVANCE = 'Получен ответ от сервиса Яндекс-практикум'
+STATUS_JOB = 'Статус работы {status}'
+STATUS_JOB_ERROR = 'Неизвестный статус работы {status}'
+TOKENS_ERROR = 'Отсутствует обязательная переменная окружения: {}'
+START_BOT = 'Бот запущен'
 STATUS_HOMEWORK = 'Изменился статус проверки работы "{name}". {verdict}'
 TYPE_KEY_ERROR = 'Тип данных homeworks не является списком, получен {type_key}'
 
 
+class ServiceException(Exception):
+    """Ошибки в работе сервиса."""
+
+    ...
+
+
 def check_tokens():
     """Проверка загрузки переменных окружения."""
-    case = (
-        ('PRACTICUM_TOKEN ', PRACTICUM_TOKEN),
-        ('TELEGRAM_TOKEN ', TELEGRAM_TOKEN),
-        ('TELEGRAM_CHAT_ID ', TELEGRAM_CHAT_ID),
-    )
     variable_error = ''
-    for name, variable in case:
-        if not variable:
-            variable_error += name
+    for name in ('PRACTICUM_TOKEN', 'TELEGRAM_TOKEN', 'TELEGRAM_CHAT_ID'):
+        if not globals()[name]:
+            variable_error += f'{name} '
     if variable_error:
-        logger.critical(MESSAGE_TOKENS.format(variable_error))
-        raise ValueError(MESSAGE_TOKENS.format(variable_error))
+        logging.critical(TOKENS_ERROR.format(variable_error), exc_info=True)
+        raise ValueError(TOKENS_ERROR.format(variable_error))
 
 
 def send_message(bot, message):
     """Отправляем сообщение в Telegram-чат."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        logger.debug(MESSAGE_BOT.format(message=message))
-    except TelegramError as error:
-        logger.error(MESSAGE_BOT_ERROR.format(error=error), exc_info=True)
-    else:
+        logging.debug(BOT_ADVANCE.format(message=message))
         return True
+    except TelegramError as error:
+        logging.error(BOT_ERROR.format(error=error), exc_info=True)
+        return False
 
 
 def get_api_answer(timestamp):
@@ -103,59 +98,52 @@ def get_api_answer(timestamp):
             params=payload,
             timeout=(TIMEOUT, TIMEOUT)
         )
-    except requests.exceptions.ConnectionError as error:
-        raise error(
-            MESSAGE_SERVER_ERROR.format(
-                endpoint=ENDPOINT,
-                headers=HEADERS,
-                params=payload,
-                timeout=TIMEOUT,
-            )
-        )
-    except requests.exceptions.Timeout as error:
-        raise error(
-            MESSAGE_SERVER_ERROR.format(
-                endpoint=ENDPOINT,
-                headers=HEADERS,
-                params=payload,
-                timeout=TIMEOUT,
-            )
-        )
     except requests.exceptions.RequestException as error:
-        raise error(
-            MESSAGE_SERVER_ERROR.format(
+        raise ServiceException(
+            SERVER_ERROR.format(
                 endpoint=ENDPOINT,
                 headers=HEADERS,
                 params=payload,
-                timeout=TIMEOUT,
+                timeout=(TIMEOUT, TIMEOUT),
+                error=error
             )
         )
     else:
-        logger.debug(MESSAGE_SERVER)
+        logging.debug(SERVER_ADVANCE)
     if response.status_code != 200:
-        raise requests.exceptions.HTTPError(
-            MESSAGE_HTTP_ERROR.format(
+        raise ValueError(
+            HTTP_ERROR.format(
                 endpoint=ENDPOINT,
                 code=response.status_code,
                 headers=HEADERS,
                 params=payload,
+                timeout=(TIMEOUT, TIMEOUT)
             )
         )
-    try:
-        return response.json()
-    except json.JSONDecodeError as error:
-        raise error(MESSAGE_DECODE_ERROR.format(endpoint=ENDPOINT))
+    response_json = response.json()
+    if 'error' in response_json or 'code' in response_json:
+        raise ValueError(
+            DECODE_ERROR.format(
+                endpoint=ENDPOINT,
+                headers=HEADERS,
+                params=payload,
+                timeout=(TIMEOUT, TIMEOUT),
+                error=response_json.get('error'),
+                code=response_json.get('code')
+            )
+        )
+    return response.json()
 
 
 def check_response(response):
     """Проверяем ответ API."""
     if not isinstance(response, dict):
-        raise TypeError(MESSAGE_DATA_ERROR.format(type_data={type(response)}))
+        raise TypeError(DATA_ERROR.format(type_data={type(response)}))
     if 'homeworks' not in response:
-        raise KeyError(KEY_ERROR.format(key='homeworks'))
+        raise KeyError(ANS_KEY_ERROR.format(key='homeworks'))
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
-        logger.error(TYPE_KEY_ERROR.format(type_key={type(homeworks)}))
+        logging.error(TYPE_KEY_ERROR.format(type_key={type(homeworks)}))
         raise TypeError(TYPE_KEY_ERROR.format(type_key={type(homeworks)}))
     return homeworks
 
@@ -164,15 +152,15 @@ def parse_status(homework):
     """Определяем статус домашней работы."""
     name = homework.get('homework_name')
     if name is None:
-        raise KeyError(KEY_ERROR.format(key='homeworks_name'))
+        raise KeyError(JOB_KEY_ERROR.format(key='homeworks_name'))
     status = homework.get('status')
-    logger.debug(MESSAGE_STATUS_JOB.format(status=status))
+    logging.debug(STATUS_JOB.format(status=status))
     if status is None:
-        raise KeyError(KEY_ERROR.format(key='homeworks_status'))
+        raise KeyError(JOB_KEY_ERROR.format(key='homeworks_status'))
     verdict = HOMEWORK_VERDICTS.get(status)
-    logger.debug(f'Оценка работы {verdict}')
+    logging.debug(f'Оценка работы {verdict}')
     if verdict is None:
-        raise ValueError(MESSAGE_STATUS_JOB_ERROR.format(status=status))
+        raise ValueError(STATUS_JOB_ERROR.format(status=status))
     return STATUS_HOMEWORK.format(name=name, verdict=verdict)
 
 
@@ -180,26 +168,32 @@ def main():
     """Основная функция для запуска Бот-ассистента."""
     check_tokens()
     bot = Bot(token=TELEGRAM_TOKEN)
-    logger.debug('Бот запущен')
+    logging.debug(START_BOT)
     timestamp = int(time.time())
     message_cache = ''
     while True:
         try:
-            message = MESSAGE_STATUS_JOB.format(status='не изменился')
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            timestamp = response.get('current_date')
-            if homework:
-                message = parse_status(homework[0])
-            send_message(bot, message)
+            homeworks = check_response(response)
+            timestamp = response.get('current_date', timestamp)
+            if homeworks:
+                message = parse_status(homeworks[0])
+                send_message(bot, message)
         except Exception as error:
             message = MESSAGE_ERROR.format(error=error)
-            logger.error(message)
-            if message != message_cache:
-                if send_message(bot, message):
-                    message_cache = message
+            logging.error(message)
+            if message != message_cache and send_message(bot, message):
+                message_cache = message
         time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(__file__ + '.log'),
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
     main()
