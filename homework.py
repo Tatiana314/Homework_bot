@@ -6,24 +6,23 @@ Telegram-бот.
 
 
 import logging
+import os
 import sys
 import time
 
 
 import requests
+from dotenv import load_dotenv
 from telegram import Bot, TelegramError
 
-from configs.base import (
-    ENDPOINT,
-    HEADERS,
-    HOMEWORK_VERDICTS,
-    PRACTICUM_TOKEN,
-    RETRY_PERIOD,
-    TELEGRAM_CHAT_ID,
-    TELEGRAM_TOKEN,
-    TIMEOUT
-)
+load_dotenv()
 
+
+PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
+TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
+HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 ANS_KEY_ERROR = 'Ответ API не содержит ключа "{key}"'
 BOT_ADVANCE = 'Бот отправил сообщение: {message}'
 BOT_ERROR = 'Бот не смог отправить сообщение {error}'
@@ -35,13 +34,11 @@ DECODE_ERROR = (
     'timeout: {timeout}.\n'
     'Ошибка: {error} {code}.'
 )
-SERVER_ERROR = (
-    'Ошибка при запросе к сервису {endpoint}. '
-    'HEADERS: {headers}.'
-    'params: {params}.'
-    'timeout: {timeout}.\n'
-    'Ошибка: {error}'
-)
+HOMEWORK_VERDICTS: dict[str: str] = {
+    'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
+    'reviewing': 'Работа взята на проверку ревьюером.',
+    'rejected': 'Работа проверена: у ревьюера есть замечания.'
+}
 HTTP_ERROR = (
     'Неожиданный ответ сервера {endpoint}. '
     'Статус ответа: {code}. '
@@ -51,19 +48,28 @@ HTTP_ERROR = (
 )
 JOB_KEY_ERROR = 'Словарь "homeworks" не содержит ключа "{key}"'
 MESSAGE_ERROR = 'Сбой в работе программы: {error}'
+RETRY_PERIOD = 600
 SERVER_ADVANCE = 'Получен ответ от сервиса Яндекс-практикум'
+SERVER_ERROR = (
+    'Ошибка при запросе к сервису {endpoint}. '
+    'HEADERS: {headers}.'
+    'params: {params}.'
+    'timeout: {timeout}.\n'
+    'Ошибка: {error}'
+)
 STATUS_JOB = 'Статус работы {status}'
 STATUS_JOB_ERROR = 'Неизвестный статус работы {status}'
-TOKENS_ERROR = 'Отсутствует обязательная переменная окружения: {}'
 START_BOT = 'Бот запущен'
 STATUS_HOMEWORK = 'Изменился статус проверки работы "{name}". {verdict}'
+TIMEOUT = 30
+TOKENS_ERROR = 'Отсутствует обязательная переменная окружения: {}'
 TYPE_KEY_ERROR = 'Тип данных homeworks не является списком, получен {type_key}'
 
 
 class ServiceException(Exception):
     """Ошибки в работе сервиса."""
 
-    ...
+    pass
 
 
 def check_tokens():

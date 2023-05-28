@@ -21,8 +21,3 @@ HOMEWORK_VERDICTS: dict[str: str] = {
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
 }
 
-MESSAGE_ERROR = (
-    'Неожиданный ответ сервера {endpoint}. '
-    'Статус ответа: {code}. '
-    'Содержание ответа {content}.'
-)
