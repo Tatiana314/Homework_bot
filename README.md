@@ -36,7 +36,8 @@ touch .env
 1. PRACTICUM_TOKEN - доступ к API сервиса Практикум.Домашка: https://oauth.yandex.ru/authorize?response_type=token&client_id=1d0b9dd4d652455a9eb710d450ff456a
 2. TELEGRAM_TOKEN - выдается @BotFather при создании бота
 3. TELEGRAM_CHAT_ID - выдается @userinfobot
-Заполнить файл данными:
+   
+Заполнить файл .env данными:
 ```
 PRACTICUM_TOKEN='token'
 TELEGRAM_TOKEN='token'
