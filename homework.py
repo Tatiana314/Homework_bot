@@ -10,7 +10,6 @@ import os
 import sys
 import time
 
-
 import requests
 from dotenv import load_dotenv
 from telegram import Bot, TelegramError
@@ -101,7 +100,7 @@ def get_api_answer(timestamp):
     try:
         response = requests.get(**request_params)
     except requests.exceptions.RequestException as error:
-        raise OSError(
+        raise ConnectionError(
             SERVER_ERROR.format(error=error, **request_params)
         )
     else:
@@ -163,9 +162,8 @@ def main():
         try:
             response = get_api_answer(timestamp)
             homeworks = check_response(response)
-            if homeworks:
-                if send_message(bot, parse_status(homeworks[0])):
-                    timestamp = response.get('current_date', timestamp)
+            if homeworks and send_message(bot, parse_status(homeworks[0])):
+                timestamp = response.get('current_date', timestamp)
         except Exception as error:
             message = MESSAGE_ERROR.format(error=error)
             logging.error(message)
